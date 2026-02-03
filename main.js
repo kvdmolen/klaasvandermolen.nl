@@ -2,8 +2,9 @@
   const canvas = document.getElementById('starfield');
   const ctx = canvas.getContext('2d');
 
-  const STAR_COUNT = 300;
-  const SPEED = 2;
+  const STAR_COUNT = 1000;
+  const SPEED = 0.5;
+  const MAX_STAR_SIZE = 3;
   let stars = [];
   let w, h;
   let mx, my;
@@ -23,6 +24,7 @@
       x: (Math.random() - 0.5) * w * 2,
       y: (Math.random() - 0.5) * h * 2,
       z: randomZ ? Math.random() * w : w,
+      size: Math.random(), // Random size factor between 0 and 1
     };
   }
 
@@ -60,7 +62,7 @@
         continue;
       }
 
-      const r = Math.max(0, 1.5 * (1 - s.z / w));
+      const r = Math.max(0, MAX_STAR_SIZE * s.size * (1 - s.z / w));
       const a = Math.max(0, 1 - s.z / w);
 
       ctx.beginPath();
