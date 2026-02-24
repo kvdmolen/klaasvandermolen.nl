@@ -1,103 +1,128 @@
-// const math = require('mathjs')
-
-
 class Elastic {
 	constructor(modeldata) {
-
-		this.nodes = modeldata.nodes.map(node => {
-			return {
-				"org": node,
-				"pos": node,
-				"edges": [],
-				"target": node,
-				"totalforce": [0,0,0]
-			}
-		})
-
-		this.edges = modeldata.edges.map(edge => {
-			return {
-				"nodes": edge,
-				"vector": [0,0,0]
-			}
-		})
+		this.nodes = modeldata.nodes.map(node => ({
+			org: node,
+			pos: [...node],
+			target: [...node]
+		}))
 
 		this.nodesfixed = modeldata.nodesfixed
 
-		this.strengthEdge = 0.5
-		this.strengthTarget = 0.005
+		// Each node's anchor corner (index into nodesfixed)
+		// Node 0 → nodesfixed[0] = [-2, 2,-2]
+		// Node 1 → nodesfixed[2] = [ 2,-2,-2]
+		// Node 2 → nodesfixed[7] = [-2,-2, 2]
+		// Node 3 → nodesfixed[5] = [ 2, 2, 2]
+		this.cornerOf = [0, 2, 7, 5]
 
-		// add Edge Index to Nodes
-		for(let nodeidx = 0; nodeidx < this.nodes.length; nodeidx++){
-			for(let edgeidx = 0; edgeidx < this.edges.length; edgeidx++){
-				if(this.edges[edgeidx].nodes.indexOf(nodeidx) >= 0){
-					this.nodes[nodeidx].edges.push({"edgeidx": edgeidx, "force": [0,0,0], "direction": this.edges[edgeidx].nodes[0] == nodeidx ? 1 : -1, "magnitude": 1})
-				}
+		// 16 ropes: from each corner, 1 direct + 3 through-ropes
+		// Direct rope:  corner → node  (1 segment)
+		// Through-rope: corner → throughNode (pulley) → endNode  (2 segments, 1 continuous rope)
+		this.ropes = []
+		for (let t = 0; t < 4; t++) {
+			for (let e = 0; e < 4; e++) {
+				this.ropes.push({
+					cornerIdx: this.cornerOf[t],
+					throughNode: t,
+					endNode: e,
+					isDirect: t === e
+				})
 			}
 		}
+
+		this.strength = 0.05
 	}
 
-
-
-	setTarget(nodeidx, target){
+	setTarget(nodeidx, target) {
 		this.nodes[nodeidx].target = this.nodes[nodeidx].org.add(target)
 	}
 
-	// Calculate unit vector for all elements. Direction of vector is arbatrary.
-	calculate_element_vectors(){
-		const nodesAll = this.nodes.map(n => n.pos).concat(this.nodesfixed)
-		for(let edgeidx = 0; edgeidx < this.edges.length; edgeidx++){
-			let edve_vector = nodesAll[this.edges[edgeidx].nodes[1]].substract(nodesAll[this.edges[edgeidx].nodes[0]])
-			this.edges[edgeidx].vector = edve_vector.divideby(edve_vector.norm())
-		}
-	}
+	// Collect all rope-pull unit vectors acting on a specific node.
+	// A direct rope pulls the node toward its corner.
+	// A through-rope pulls the pulley node toward corner AND toward the endpoint,
+	// and pulls the endpoint toward the pulley node.
+	getRopeDirections(nodeidx) {
+		const dirs = []
+		const pos = this.nodes[nodeidx].pos
 
-	calculate_point_force(){
-		// use magnitude to calculate force of edge to point in direction of edge
-		for(let nodeidx = 0; nodeidx < this.nodes.length; nodeidx++){
-			this.nodes[nodeidx].totalforce = [0,0,0]
-			this.nodes[nodeidx].edges.forEach((edge, edgeidx) => {
-				this.nodes[nodeidx].edges[edgeidx].force = edge.direction > 0 ? this.edges[edge.edgeidx].vector.multiply(edge.magnitude) : this.edges[edge.edgeidx].vector.invert().multiply(edge.magnitude)
-				this.nodes[nodeidx].totalforce = this.nodes[nodeidx].totalforce.add(this.nodes[nodeidx].edges[edgeidx].force)
-			})
-		}
-	}
+		for (const rope of this.ropes) {
+			const cornerPos = this.nodesfixed[rope.cornerIdx]
 
-	// incrementally change the magnitude of the pulling vector
-	calculate_new_magnitude(){
-		for(let nodeidx = 0; nodeidx < this.nodes.length; nodeidx++){
-			this.nodes[nodeidx].edges.forEach((edge, edgeidx) => {
-				let projectedlength = this.nodes[nodeidx].totalforce.projecton(this.edges[edge.edgeidx].vector)
-				this.nodes[nodeidx].edges[edgeidx].magnitude = (edge.magnitude + ((-1 * projectedlength) / 3)).range(0.2, 5)
-			})
-		}
-	}
+			if (rope.isDirect && rope.throughNode === nodeidx) {
+				// Direct rope: node pulled toward corner
+				const v = cornerPos.substract(pos)
+				const d = v.norm()
+				if (d > 0.001) dirs.push(v.divideby(d))
 
-	calculate_new_positions(){
-		for(let nodeidx = 0; nodeidx < this.nodes.length; nodeidx++){
-			this.nodes[nodeidx].pos = this.nodes[nodeidx].pos.add(this.nodes[nodeidx].totalforce.multiply(this.strengthEdge))
-			this.nodes[nodeidx].pos = this.nodes[nodeidx].pos.add(this.nodes[nodeidx].target.substract(this.nodes[nodeidx].pos).multiply(this.strengthTarget))
+			} else if (!rope.isDirect) {
+				if (rope.throughNode === nodeidx) {
+					// Pulley node: pulled toward corner
+					const v1 = cornerPos.substract(pos)
+					const d1 = v1.norm()
+					if (d1 > 0.001) dirs.push(v1.divideby(d1))
+
+					// Pulley node: pulled toward endpoint
+					const v2 = this.nodes[rope.endNode].pos.substract(pos)
+					const d2 = v2.norm()
+					if (d2 > 0.001) dirs.push(v2.divideby(d2))
+				}
+
+				if (rope.endNode === nodeidx) {
+					// Endpoint: pulled toward pulley node
+					const v = this.nodes[rope.throughNode].pos.substract(pos)
+					const d = v.norm()
+					if (d > 0.001) dirs.push(v.divideby(d))
+				}
+			}
 		}
+		return dirs
 	}
 
 	interate() {
-		this.calculate_element_vectors()
-		this.calculate_point_force()
-		this.calculate_new_magnitude()
-		this.calculate_point_force()
-		this.calculate_new_positions()
+		// Compute constrained displacements for all nodes from current state
+		const updates = []
+
+		for (let i = 0; i < this.nodes.length; i++) {
+			const desired = this.nodes[i].target.substract(this.nodes[i].pos)
+			const dirs = this.getRopeDirections(i)
+
+			// Project desired displacement onto each rope direction.
+			// Only keep positive components (ropes can only pull).
+			let pull = [0, 0, 0]
+			for (const dir of dirs) {
+				const alignment = desired.dot(dir)
+				if (alignment > 0) {
+					pull = pull.add(dir.multiply(alignment))
+				}
+			}
+
+			// Average across all rope directions to prevent overcounting
+			if (dirs.length > 0) {
+				pull = pull.divideby(dirs.length)
+			}
+
+			updates.push(pull.multiply(this.strength))
+		}
+
+		// Apply all updates simultaneously (consistent snapshot)
+		for (let i = 0; i < this.nodes.length; i++) {
+			this.nodes[i].pos = this.nodes[i].pos.add(updates[i])
+		}
 	}
 
 	getNodes() {
-		return this.nodes.map(el => {
-			return el.pos
-		})
+		return this.nodes.map(el => el.pos)
 	}
 
+	// Output: 16 rope lengths (motor positions)
+	getRopeLengths() {
+		return this.ropes.map(rope => {
+			const cornerPos = this.nodesfixed[rope.cornerIdx]
+			const tPos = this.nodes[rope.throughNode].pos
+			const seg1 = cornerPos.substract(tPos).norm()
+			if (rope.isDirect) return seg1
+			const ePos = this.nodes[rope.endNode].pos
+			return seg1 + tPos.substract(ePos).norm()
+		})
+	}
 }
-
-
-
-// module.exports = Elastic;
-// const User = require('./user');
-// const jim = new User('Jim', 37, 'jim@example.com');
-// console.log(jim.getUserStats());

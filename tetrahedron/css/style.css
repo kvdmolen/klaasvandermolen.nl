@@ -171,3 +171,77 @@ html, body {
     flex-shrink: 0;
     font-variant-numeric: tabular-nums;
 }
+
+/* ---- Timeline ---- */
+.timeline-actions {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.frame-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 4px;
+    border-radius: 4px;
+    margin: 3px 0;
+}
+
+.frame-row.active {
+    background: var(--btn-active);
+    color: #fff;
+}
+
+.frame-name {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    color: var(--panel-text);
+    font-size: 10px;
+    font-family: inherit;
+    padding: 2px 0;
+    outline: none;
+}
+
+.frame-row.active .frame-name {
+    color: #fff;
+}
+
+.frame-duration {
+    width: 32px;
+    background: transparent;
+    border: none;
+    color: var(--panel-label);
+    font-size: 10px;
+    font-family: inherit;
+    text-align: right;
+    outline: none;
+    -moz-appearance: textfield;
+}
+
+.frame-duration::-webkit-inner-spin-button,
+.frame-duration::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.frame-duration-unit {
+    font-size: 9px;
+    color: var(--panel-heading);
+}
+
+.frame-delete {
+    background: none;
+    border: none;
+    color: var(--panel-label);
+    font-size: 13px;
+    cursor: pointer;
+    padding: 0 2px;
+    line-height: 1;
+}
+
+.frame-delete:hover {
+    color: var(--panel-text);
+}

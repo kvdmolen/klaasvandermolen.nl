@@ -22,16 +22,6 @@ class Canvas {
 
 		this.makeRotationMatrix()
 
-		// let obj = {
-		// 	"lines": [
-		// 		{"p1": [0,0,0], "p2":[1,0,0], "w": 1, "c": "#333"}
-		// 	],
-		// 	"points": [
-		// 		{"p": [0,0,0], "r": 10, "c": "#333"}
-		// 	]
-		// }
-
-
 		var self = this
 		this.cnv.onmousedown = function(e){
 		    self.mouse.isdown = true
@@ -80,9 +70,9 @@ class Canvas {
 	}
 
 	makeRotationMatrix() {
-			this.rotation.x = [[1.0, 0, 0], [0, Math.cos(this.view.rotation.x), -1.0 * Math.sin(this.view.rotation.x)], [0, Math.sin(this.view.rotation.x), Math.cos(this.view.rotation.x)]]
-			this.rotation.y = [[Math.cos(this.view.rotation.y), 0, Math.sin(this.view.rotation.y)], [0, 1.0, 0], [-1.0 * Math.sin(this.view.rotation.y), 0, Math.cos(this.view.rotation.y)]]
-			this.rotation.z = [[Math.cos(this.view.rotation.z), -1.0 * Math.sin(this.view.rotation.z), 0], [Math.sin(this.view.rotation.z), Math.cos(this.view.rotation.z), 0], [0, 0, 1]]
+		this.rotation.x = [[1.0, 0, 0], [0, Math.cos(this.view.rotation.x), -1.0 * Math.sin(this.view.rotation.x)], [0, Math.sin(this.view.rotation.x), Math.cos(this.view.rotation.x)]]
+		this.rotation.y = [[Math.cos(this.view.rotation.y), 0, Math.sin(this.view.rotation.y)], [0, 1.0, 0], [-1.0 * Math.sin(this.view.rotation.y), 0, Math.cos(this.view.rotation.y)]]
+		this.rotation.z = [[Math.cos(this.view.rotation.z), -1.0 * Math.sin(this.view.rotation.z), 0], [Math.sin(this.view.rotation.z), Math.cos(this.view.rotation.z), 0], [0, 0, 1]]
 	}
 
 	rotatePoints(points){

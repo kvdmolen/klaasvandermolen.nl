@@ -8,13 +8,11 @@
 <link rel="stylesheet" href="css/switch.css">
 <link rel="stylesheet" href="css/style.css">
 
-<link rel="stylesheet" href="https://pro.fontawesome.com/releases/v5.10.0/css/all.css" integrity="sha384-AYmEC3Yw5cVb3ZcuHtOA93w35dYTsvhLPVnYs9eStHfGJvOvKxVfELGroGkvsg+p" crossorigin="anonymous"/>
-
-<script type="text/javascript" src="/js/prototype.js"></script>
-<script type="text/javascript" src="/js/canvas.js"></script>
+<script type="text/javascript" src="js/prototype.js"></script>
+<script type="text/javascript" src="js/canvas.js"></script>
 <script type="text/javascript" src="https://unpkg.com/vue@3.5.22/dist/vue.global.js"></script>
 <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/14.8.1/math.min.js"></script>
-<script type="text/javascript" src="/elastic.js"></script>
+<script type="text/javascript" src="elastic.js"></script>
 
 
 </head>
@@ -66,6 +64,23 @@
                     <span class="hvalue">{{ skew[key].toFixed(2) }}</span>
                 </div>
             </div>
+
+            <div class="control-section">
+                <h4>Timeline</h4>
+                <div class="timeline-actions">
+                    <button class="toggle-btn" @click="saveFrame">+ Save</button>
+                    <button class="toggle-btn" :class="{ running: playing }" @click="togglePlayback">
+                        {{ playing ? '&#9632; Stop' : '&#9654; Play' }}
+                    </button>
+                </div>
+                <div v-for="(frame, idx) in frames" :key="idx"
+                     class="frame-row" :class="{ active: playingIdx === idx }">
+                    <input class="frame-name" type="text" v-model="frame.name">
+                    <input class="frame-duration" type="number" min="0.1" step="0.1" v-model.number="frame.duration">
+                    <span class="frame-duration-unit">s</span>
+                    <button class="frame-delete" @click="deleteFrame(idx)">&times;</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -82,7 +97,13 @@
                     currentnodeid: 0,
                     pos: { x: 0, y: 0, z: 0 },
                     size: 0,
-                    skew: { e01: 0, e02: 0, e03: 0, e12: 0, e13: 0, e23: 0 }
+                    skew: { e01: 0, e02: 0, e03: 0, e12: 0, e13: 0, e23: 0 },
+                    frames: [],
+                    playing: false,
+                    playingIdx: -1,
+                    playRaf: null,
+                    playStart: 0,
+                    nextFrameId: 1
                 };
             },
             computed: {
@@ -162,6 +183,77 @@
                 },
                 toggleRun: function(){
                     this.running ? this.stop() : this.run()
+                },
+
+                saveFrame: function(){
+                    this.frames.push({
+                        name: 'Frame ' + this.nextFrameId++,
+                        duration: 5,
+                        pos: { x: this.pos.x, y: this.pos.y, z: this.pos.z },
+                        size: this.size,
+                        skew: { ...this.skew }
+                    })
+                },
+                loadFrame: function(idx){
+                    const f = this.frames[idx]
+                    this.pos.x = f.pos.x
+                    this.pos.y = f.pos.y
+                    this.pos.z = f.pos.z
+                    this.size = f.size
+                    Object.assign(this.skew, f.skew)
+                },
+                lerpFrames: function(a, b, t){
+                    this.pos.x = a.pos.x + (b.pos.x - a.pos.x) * t
+                    this.pos.y = a.pos.y + (b.pos.y - a.pos.y) * t
+                    this.pos.z = a.pos.z + (b.pos.z - a.pos.z) * t
+                    this.size = a.size + (b.size - a.size) * t
+                    for (var k in a.skew) {
+                        this.skew[k] = a.skew[k] + (b.skew[k] - a.skew[k]) * t
+                    }
+                },
+                deleteFrame: function(idx){
+                    if (this.playing && this.playingIdx === idx) this.stopPlayback()
+                    else if (this.playing && this.playingIdx > idx) this.playingIdx--
+                    this.frames.splice(idx, 1)
+                },
+                playFrames: function(){
+                    if (this.frames.length < 2) {
+                        if (this.frames.length === 1) this.loadFrame(0)
+                        return
+                    }
+                    this.playing = true
+                    this.playingIdx = 0
+                    this.playStart = performance.now()
+                    var self = this
+                    var tick = function(now){
+                        if (!self.playing) return
+                        var elapsed = (now - self.playStart) / 1000
+                        var dur = self.frames[self.playingIdx].duration
+                        if (elapsed >= dur) {
+                            self.playingIdx++
+                            if (self.playingIdx >= self.frames.length - 1) {
+                                self.loadFrame(self.frames.length - 1)
+                                self.stopPlayback()
+                                return
+                            }
+                            self.playStart = now
+                            elapsed = 0
+                            dur = self.frames[self.playingIdx].duration
+                        }
+                        var t = Math.min(elapsed / dur, 1)
+                        self.lerpFrames(self.frames[self.playingIdx], self.frames[self.playingIdx + 1], t)
+                        self.playRaf = requestAnimationFrame(tick)
+                    }
+                    this.playRaf = requestAnimationFrame(tick)
+                },
+                stopPlayback: function(){
+                    if (this.playRaf) cancelAnimationFrame(this.playRaf)
+                    this.playRaf = null
+                    this.playing = false
+                    this.playingIdx = -1
+                },
+                togglePlayback: function(){
+                    this.playing ? this.stopPlayback() : this.playFrames()
                 },
 
                 computeTargets: function(){
