@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Tetra</title>
+
+<link rel="stylesheet" href="css/normalize.css">
+<link rel="stylesheet" href="css/switch.css">
+<link rel="stylesheet" href="css/style.css">
+
+<link rel="stylesheet" href="https://pro.fontawesome.com/releases/v5.10.0/css/all.css" integrity="sha384-AYmEC3Yw5cVb3ZcuHtOA93w35dYTsvhLPVnYs9eStHfGJvOvKxVfELGroGkvsg+p" crossorigin="anonymous"/>
+
+<script type="text/javascript" src="/js/prototype.js"></script>
+<script type="text/javascript" src="/js/canvas.js"></script>
+<script type="text/javascript" src="https://unpkg.com/vue@3.5.22/dist/vue.global.js"></script>
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/14.8.1/math.min.js"></script>
+<script type="text/javascript" src="/elastic.js"></script>
+
+
+</head>
+<body>
+	<div id="app">
+        <canvas id="canvas"></canvas>
+
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title">TETRA</span>
+                <button class="toggle-btn" :class="{ running }" @click="toggleRun">
+                    {{ running ? '&#9632; Stop' : '&#9654; Run' }}
+                </button>
+            </div>
+
+            <div class="control-section">
+                <h4>Position</h4>
+                <div class="hslider-row">
+                    <span class="hlabel">x</span>
+                    <input type="range" min="-1" max="1" step="0.01" v-model.number="pos.x">
+                    <span class="hvalue">{{ pos.x.toFixed(2) }}</span>
+                </div>
+                <div class="hslider-row">
+                    <span class="hlabel">y</span>
+                    <input type="range" min="-1" max="1" step="0.01" v-model.number="pos.y">
+                    <span class="hvalue">{{ pos.y.toFixed(2) }}</span>
+                </div>
+                <div class="hslider-row">
+                    <span class="hlabel">z</span>
+                    <input type="range" min="-1" max="1" step="0.01" v-model.number="pos.z">
+                    <span class="hvalue">{{ pos.z.toFixed(2) }}</span>
+                </div>
+            </div>
+
+            <div class="control-section">
+                <h4>Size</h4>
+                <div class="hslider-row">
+                    <span class="hlabel">s</span>
+                    <input type="range" min="-1" max="1" step="0.01" v-model.number="size">
+                    <span class="hvalue">{{ size.toFixed(2) }}</span>
+                </div>
+            </div>
+
+            <div class="control-section">
+                <h4>Skew</h4>
+                <div class="hslider-row" v-for="(label, key) in skewLabels" :key="key">
+                    <span class="hlabel">{{ label }}</span>
+                    <input type="range" min="-1" max="1" step="0.01" v-model.number="skew[key]">
+                    <span class="hvalue">{{ skew[key].toFixed(2) }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+
+        const { createApp } = Vue;
+        const app = createApp({
+            data() {
+                return {
+                    active: false,
+                    running: false,
+                    timerInterval: null,
+                    timerGraphic: null,
+                    currentnodeid: 0,
+                    pos: { x: 0, y: 0, z: 0 },
+                    size: 0,
+                    skew: { e01: 0, e02: 0, e03: 0, e12: 0, e13: 0, e23: 0 }
+                };
+            },
+            computed: {
+                skewLabels() {
+                    return { e01: '0-1', e02: '0-2', e03: '0-3', e12: '1-2', e13: '1-3', e23: '2-3' }
+                }
+            },
+            mounted: function(){
+                var self = this
+                setTimeout(()=>{
+                    self.activate()
+                    self.computeTargets()
+                    self.run()
+                })
+            },
+            destroyed: function(){
+            },
+            watch: {
+                pos: { handler: function(){ this.computeTargets() }, deep: true },
+                size: function(){ this.computeTargets() },
+                skew: { handler: function(){ this.computeTargets() }, deep: true },
+            	// vTetra: {
+            		// handler: function(){
+            			// this.setInput("tetra", this.vTetra)
+            		// },
+            		// deep: true
+            	// },
+                // vSuspension: {
+                    // handler: function(){
+                        // this.setInput("suspension", this.vSuspension)
+                    // },
+                    // deep: true
+                // },
+            },
+            methods: {
+                emit: function(action, data){
+                	// console.log(action)
+                    // socket.emit("clientevent", {action: action, data: data})
+
+                    if(action == "activate"){
+                    }
+                    else if(action == "getpositions"){
+                        let points = model.getNodes().concat(modeldata.nodesfixed)
+                            // console.log(points)
+                        for(let lineidx = 0; lineidx < modeldata.edges.length; lineidx++){
+                            canvas.lineUpdate(lineidx, points[modeldata.edges[lineidx][0]], points[modeldata.edges[lineidx][1]])
+                        }
+
+                        canvas.update()
+                    }
+                    else if(action == "run"){
+                        model.interate()
+                    }
+                },
+                activate: function(){
+                    this.active = true
+                    this.emit("activate", {})
+                },
+                deactivate: function(){
+                    this.active = false
+                    this.emit("deactivate", {})
+                },
+                run: function(){
+                    var self = this
+                    this.running = true
+                    this.timerInterval = setInterval(()=>{
+                        self.emit("run", {})
+                    }, 10)
+                    this.timerGraphic = setInterval(()=>{
+                        self.emit("getpositions", {})
+                    }, 20)
+                },
+                stop: function(){
+                    this.running = false
+                    clearInterval(this.timerInterval)
+                    clearInterval(this.timerGraphic)
+                },
+                toggleRun: function(){
+                    this.running ? this.stop() : this.run()
+                },
+
+                computeTargets: function(){
+                    const base = [[-1,1,-1],[1,-1,-1],[-1,-1,1],[1,1,1]]
+                    const scale = 1 + this.size
+
+                    // Step 1: scale each node's distance from center
+                    let targets = base.map(b => [b[0]*scale, b[1]*scale, b[2]*scale])
+
+                    // Step 2: skew — push/pull each node pair symmetrically along their edge axis
+                    const skewEdges = [
+                        [0, 1, this.skew.e01],
+                        [0, 2, this.skew.e02],
+                        [0, 3, this.skew.e03],
+                        [1, 2, this.skew.e12],
+                        [1, 3, this.skew.e13],
+                        [2, 3, this.skew.e23]
+                    ]
+                    const deltas = [[0,0,0],[0,0,0],[0,0,0],[0,0,0]]
+                    for (const [a, b, sk] of skewEdges) {
+                        const diff = [targets[b][0]-targets[a][0], targets[b][1]-targets[a][1], targets[b][2]-targets[a][2]]
+                        for (let k = 0; k < 3; k++) {
+                            deltas[a][k] -= diff[k] * sk / 2
+                            deltas[b][k] += diff[k] * sk / 2
+                        }
+                    }
+                    targets = targets.map((t, i) => [t[0]+deltas[i][0], t[1]+deltas[i][1], t[2]+deltas[i][2]])
+
+                    // Step 3: translate all attractors
+                    targets = targets.map(t => [t[0]+this.pos.x, t[1]+this.pos.y, t[2]+this.pos.z])
+
+                    // Step 4: pass offset to setTarget (which adds org internally)
+                    for (let i = 0; i < 4; i++) {
+                        const org = base[i]
+                        model.setTarget(i, [targets[i][0]-org[0], targets[i][1]-org[1], targets[i][2]-org[2]])
+                    }
+                }
+            }
+        });
+        app.mount('#app');
+
+        let modeldata = {
+            "nodes": [[-1,  1, -1],[ 1, -1, -1],[-1, -1,  1],[ 1,  1,  1]],
+            "nodesfixed": [[-2,  2, -2],[ 2,  2, -2],[ 2, -2, -2],[-2, -2, -2],[-2,  2,  2],[ 2,  2,  2],[ 2, -2,  2],[-2, -2,  2]],
+            "edges": [[0,1],[0,2],[0,3],[1,2],[1,3],[2,3],[0,4],[1,6],[2,11],[3,9]]
+        }
+
+        let points = modeldata.nodes.concat(modeldata.nodesfixed)
+        let frame = [[4, 5],[5, 6],[6, 7],[7, 4],[8, 9],[9, 10],[10, 11],[11, 8],[4, 8],[5, 9],[6, 10],[7, 11]]
+
+        const model  = new Elastic(modeldata)
+        const canvas = new Canvas("canvas")
+
+        randomVector = function(size){
+            return [(Math.random()*2-1)*size,(Math.random()*2-1)*size,(Math.random()*2-1)*size]
+        }
+
+        const darkMQ = window.matchMedia('(prefers-color-scheme: dark)')
+
+        function themeColors() {
+            return darkMQ.matches
+                ? { edge: '#FFFFFF', frame: '#444444' }
+                : { edge: '#111111', frame: '#CCCCCC' }
+        }
+
+        function applyThemeColors() {
+            const c = themeColors()
+            const edgeCount = modeldata.edges.length
+            canvas.lines.forEach((line, i) => {
+                line.color = i < edgeCount ? c.edge : c.frame
+            })
+            canvas.update()
+        }
+
+        const c = themeColors()
+        modeldata.edges.forEach((line) => {
+            canvas.lineAdd(points[line[0]], points[line[1]], 2, c.edge)
+        })
+
+        frame.forEach((line) => {
+            canvas.lineAdd(points[line[0]], points[line[1]], 2, c.frame)
+        })
+
+        darkMQ.addEventListener('change', applyThemeColors)
+
+        // canvas.pointAdd([-2, -2, -2], 4, "#0F0")
+
+        canvas.update()
+
+    </script>
+  </body>
+</html>
